@@ -25,6 +25,14 @@ import org.mitre.synthea.world.concepts.HealthRecord.Encounter;
 import org.mitre.synthea.world.concepts.HealthRecord.Observation;
 import org.mitre.synthea.world.concepts.HealthRecord.Report;
 
+import org.hl7.fhir.dstu3.model.BooleanType;
+import org.hl7.fhir.dstu3.model.Bundle;
+import org.hl7.fhir.dstu3.model.Bundle.BundleEntryComponent;
+import org.hl7.fhir.dstu3.model.Bundle.BundleEntryRequestComponent;
+import org.hl7.fhir.dstu3.model.Bundle.BundleType;
+import org.hl7.fhir.dstu3.model.Bundle.HTTPVerb;
+
+
 public abstract class Exporter {
   /**
    * Export a single patient, into all the formats supported. (Formats may be enabled or disabled by
@@ -61,54 +69,73 @@ public abstract class Exporter {
   private static void exportRecord(Person person, String fileTag, long stopTime) {
 
     if (Boolean.parseBoolean(Config.get("exporter.fhir_stu3.export"))) {
-      File outDirectory = getOutputFolder("fhir_stu3", person);
+      File outDirectoryT = getOutputFolder("fhir_stu3_transaction", person);
+      File outDirectoryC = getOutputFolder("fhir_stu3_collection", person);
+      File outDirectoryTND = getOutputFolder("fhir_stu3_transaction_ndjson", person);
+      File outDirectoryCND = getOutputFolder("fhir_stu3_collection_ndjson", person);
+      //String bundleJson = FhirStu3.convertToFHIRJson(person, stopTime);
+      //String bundleNDJson = FhirStu3.convertToFHIRNDJson(person, stopTime);
+
+      String bundleTJson = FhirStu3.convertToFHIRNDJsonCustom(person, stopTime, BundleType.TRANSACTION, true);
+      String bundleTNDJson = FhirStu3.convertToFHIRNDJsonCustom(person, stopTime, BundleType.TRANSACTION, false);
+      String bundleCJson = FhirStu3.convertToFHIRNDJsonCustom(person, stopTime, BundleType.COLLECTION, true);
+      String bundleCNDJson = FhirStu3.convertToFHIRNDJsonCustom(person, stopTime, BundleType.COLLECTION, false);
+
+      Path outFilePathT = outDirectoryT.toPath().resolve(filename(person, fileTag, "json"));
+      Path outFileCommonTND = outDirectoryTND.toPath().resolve("transaction.ndjson");
+      Path outFilePathC = outDirectoryC.toPath().resolve(filename(person, fileTag, "json"));
+      Path outFileCommonCND = outDirectoryCND.toPath().resolve("collections.ndjson");
+
+      writeNewFile(outFilePathT, bundleTJson);
+      writeNewFile(outFilePathC, bundleCJson);
+      appendToFile(outFileCommonTND, bundleTNDJson);
+      appendToFile(outFileCommonCND, bundleCNDJson);
+
       if (Boolean.parseBoolean(Config.get("exporter.fhir.bulk_data"))) {
+        File outDirectory = getOutputFolder("fhir_stu3_ndjson", person);
         org.hl7.fhir.dstu3.model.Bundle bundle = FhirStu3.convertToFHIR(person, stopTime);
         IParser parser = FhirContext.forDstu3().newJsonParser().setPrettyPrint(false);
+
         for (org.hl7.fhir.dstu3.model.Bundle.BundleEntryComponent entry : bundle.getEntry()) {
           String filename = entry.getResource().getResourceType().toString() + ".ndjson";
           Path outFilePath = outDirectory.toPath().resolve(filename);
           String entryJson = parser.encodeResourceToString(entry.getResource());
           appendToFile(outFilePath, entryJson);
         }
-      } else {
-        String bundleJson = FhirStu3.convertToFHIRJson(person, stopTime);
-        Path outFilePath = outDirectory.toPath().resolve(filename(person, fileTag, "json"));
-        writeNewFile(outFilePath, bundleJson);
       }
     }
     if (Boolean.parseBoolean(Config.get("exporter.fhir_dstu2.export"))) {
       File outDirectory = getOutputFolder("fhir_dstu2", person);
+      String bundleJson = FhirDstu2.convertToFHIRJson(person, stopTime);
+      Path outFilePath = outDirectory.toPath().resolve(filename(person, fileTag, "json"));
+      writeNewFile(outFilePath, bundleJson);
       if (Boolean.parseBoolean(Config.get("exporter.fhir.bulk_data"))) {
+        outDirectory = getOutputFolder("fhir_dstu2_ndjson", person);
         ca.uhn.fhir.model.dstu2.resource.Bundle bundle = FhirDstu2.convertToFHIR(person, stopTime);
         IParser parser = FhirContext.forDstu2().newJsonParser().setPrettyPrint(false);
         for (ca.uhn.fhir.model.dstu2.resource.Bundle.Entry entry : bundle.getEntry()) {
           String filename = entry.getResource().getResourceName() + ".ndjson";
-          Path outFilePath = outDirectory.toPath().resolve(filename);
+          outFilePath = outDirectory.toPath().resolve(filename);
           String entryJson = parser.encodeResourceToString(entry.getResource());
           appendToFile(outFilePath, entryJson);
         }
-      } else {
-        String bundleJson = FhirDstu2.convertToFHIRJson(person, stopTime);
-        Path outFilePath = outDirectory.toPath().resolve(filename(person, fileTag, "json"));
-        writeNewFile(outFilePath, bundleJson);
       }
     }
     if (Boolean.parseBoolean(Config.get("exporter.fhir.export"))) {
       File outDirectory = getOutputFolder("fhir", person);
+      String bundleJson = FhirR4.convertToFHIRJson(person, stopTime);
+      Path outFilePath = outDirectory.toPath().resolve(filename(person, fileTag, "json"));
+      writeNewFile(outFilePath, bundleJson);
       if (Boolean.parseBoolean(Config.get("exporter.fhir.bulk_data"))) {
+        outDirectory = getOutputFolder("fhir", person);
         org.hl7.fhir.r4.model.Bundle bundle = FhirR4.convertToFHIR(person, stopTime);
         IParser parser = FhirContext.forR4().newJsonParser().setPrettyPrint(false);
         for (org.hl7.fhir.r4.model.Bundle.BundleEntryComponent entry : bundle.getEntry()) {
           String filename = entry.getResource().getResourceType().toString() + ".ndjson";
-          Path outFilePath = outDirectory.toPath().resolve(filename);
+          outFilePath = outDirectory.toPath().resolve(filename);
           String entryJson = parser.encodeResourceToString(entry.getResource());
           appendToFile(outFilePath, entryJson);
         }
-      } else {
-        String bundleJson = FhirR4.convertToFHIRJson(person, stopTime);
-        Path outFilePath = outDirectory.toPath().resolve(filename(person, fileTag, "json"));
-        writeNewFile(outFilePath, bundleJson);
       }
     }
     if (Boolean.parseBoolean(Config.get("exporter.ccda.export"))) {
@@ -321,7 +348,7 @@ public abstract class Exporter {
 
       // some of the "future death" logic could potentially add a future-dated death certificate
       Predicate<Observation> isCauseOfDeath =
-          o -> DeathModule.CAUSE_OF_DEATH_CODE.code.equals(o.type);
+              o -> DeathModule.CAUSE_OF_DEATH_CODE.code.equals(o.type);
       // keep cause of death unless it's future dated
       Predicate<Observation> keepObservation = isCauseOfDeath.and(notFutureDated);
       filterEntries(encounter.observations, claimItems, cutoffDate, endTime, keepObservation);
@@ -335,26 +362,26 @@ public abstract class Exporter {
 
       // keep medications if still active, regardless of start date
       filterEntries(encounter.medications, claimItems, cutoffDate, endTime,
-          med -> record.medicationActive(med.type));
+              med -> record.medicationActive(med.type));
 
       filterEntries(encounter.immunizations, claimItems, cutoffDate, endTime, null);
 
       // keep careplans if they are still active, regardless of start date
       filterEntries(encounter.careplans, claimItems, cutoffDate, endTime,
-          cp -> record.careplanActive(cp.type));
+              cp -> record.careplanActive(cp.type));
     }
 
     // if ANY of these are not empty, the encounter is not empty
     Predicate<Encounter> encounterNotEmpty = e ->
-        !e.conditions.isEmpty() || !e.allergies.isEmpty()
-            || !e.observations.isEmpty() || !e.reports.isEmpty()
-            || !e.procedures.isEmpty() || !e.medications.isEmpty()
-            || !e.immunizations.isEmpty() || !e.careplans.isEmpty();
+            !e.conditions.isEmpty() || !e.allergies.isEmpty()
+                    || !e.observations.isEmpty() || !e.reports.isEmpty()
+                    || !e.procedures.isEmpty() || !e.medications.isEmpty()
+                    || !e.immunizations.isEmpty() || !e.careplans.isEmpty();
 
     Predicate<Encounter> isDeathCertification =
-        e -> !e.codes.isEmpty() && DeathModule.DEATH_CERTIFICATION.equals(e.codes.get(0));
+            e -> !e.codes.isEmpty() && DeathModule.DEATH_CERTIFICATION.equals(e.codes.get(0));
     Predicate<Encounter> keepEncounter =
-        encounterNotEmpty.or(isDeathCertification.and(notFutureDated));
+            encounterNotEmpty.or(isDeathCertification.and(notFutureDated));
 
     // finally filter out any empty encounters
     filterEntries(record.encounters, Collections.emptyList(), cutoffDate, endTime, keepEncounter);
@@ -375,8 +402,8 @@ public abstract class Exporter {
    *                     be kept
    */
   private static <E extends HealthRecord.Entry> void filterEntries(List<E> entries,
-      List<HealthRecord.Entry> claimItems, long cutoffDate,
-      long endTime, Predicate<E> keepFunction) {
+                                                                   List<HealthRecord.Entry> claimItems, long cutoffDate,
+                                                                   long endTime, Predicate<E> keepFunction) {
 
     Iterator<E> iterator = entries.iterator();
     // iterator allows us to use the remove() method
@@ -386,7 +413,7 @@ public abstract class Exporter {
       // and the special keep function (if provided) doesn't say keep it
       // remove it from the list
       if (!entryWithinTimeRange(entry, cutoffDate, endTime)
-          && (keepFunction == null || !keepFunction.test(entry))) {
+              && (keepFunction == null || !keepFunction.test(entry))) {
         iterator.remove();
 
         claimItems.removeIf(ci -> ci == entry);
@@ -396,7 +423,7 @@ public abstract class Exporter {
   }
 
   private static boolean entryWithinTimeRange(
-      HealthRecord.Entry e, long cutoffDate, long endTime) {
+          HealthRecord.Entry e, long cutoffDate, long endTime) {
 
     if (e.start > cutoffDate && e.start <= endTime) {
       return true; // trivial case, when we're within the last __ years
@@ -433,7 +460,7 @@ public abstract class Exporter {
     folders.add(folderName);
 
     if (person != null
-        && Boolean.parseBoolean(Config.get("exporter.subfolders_by_id_substring"))) {
+            && Boolean.parseBoolean(Config.get("exporter.subfolders_by_id_substring"))) {
       String id = (String) person.attributes.get(Person.ID);
 
       folders.add(id.substring(0, 2));
@@ -463,7 +490,7 @@ public abstract class Exporter {
     } else {
       // ensure unique filenames for now
       return person.attributes.get(Person.NAME).toString().replace(' ', '_') + "_"
-          + person.attributes.get(Person.ID) + tag + "." + extension;
+              + person.attributes.get(Person.ID) + tag + "." + extension;
     }
   }
 }

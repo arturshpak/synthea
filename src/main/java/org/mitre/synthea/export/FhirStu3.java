@@ -142,9 +142,9 @@ public class FhirStu3 {
   private static final Map languageLookup = loadLanguageLookup();
 
   private static final boolean USE_SHR_EXTENSIONS =
-      Boolean.parseBoolean(Config.get("exporter.fhir.use_shr_extensions"));
+          Boolean.parseBoolean(Config.get("exporter.fhir.use_shr_extensions"));
   protected static boolean TRANSACTION_BUNDLE =
-      Boolean.parseBoolean(Config.get("exporter.fhir.transaction_bundle"));
+          Boolean.parseBoolean(Config.get("exporter.fhir.transaction_bundle"));
 
   private static final String COUNTRY_CODE = Config.get("generate.geography.country_code");
 
@@ -264,27 +264,96 @@ public class FhirStu3 {
 
       // one claim per encounter
       BundleEntryComponent encounterClaim = encounterClaim(personEntry, bundle,
-          encounterEntry, encounter.claim);
+              encounterEntry, encounter.claim);
 
       explanationOfBenefit(personEntry,bundle,encounterEntry,person,
-          encounterClaim, encounter);
+              encounterClaim, encounter);
     }
     return bundle;
   }
 
+  public static Bundle convertToFHIRCustom(Person person, long stopTime, BundleType btype) {
+    Bundle bundle = new Bundle();
+    bundle.setType(btype);
+
+
+    BundleEntryComponent personEntry = basicInfo(person, bundle, stopTime);
+
+    for (Encounter encounter : person.record.encounters) {
+      BundleEntryComponent encounterEntry = encounter(person, personEntry, bundle, encounter);
+
+      for (HealthRecord.Entry condition : encounter.conditions) {
+        condition(personEntry, bundle, encounterEntry, condition);
+      }
+
+      for (HealthRecord.Entry allergy : encounter.allergies) {
+        allergy(personEntry, bundle, encounterEntry, allergy);
+      }
+
+      for (Observation observation : encounter.observations) {
+        observation(personEntry, bundle, encounterEntry, observation);
+      }
+
+      for (Procedure procedure : encounter.procedures) {
+        procedure(personEntry, bundle, encounterEntry, procedure);
+      }
+
+      for (Medication medication : encounter.medications) {
+        medication(personEntry, bundle, encounterEntry, medication);
+      }
+
+      for (HealthRecord.Entry immunization : encounter.immunizations) {
+        immunization(personEntry, bundle, encounterEntry, immunization);
+      }
+
+      for (Report report : encounter.reports) {
+        report(personEntry, bundle, encounterEntry, report);
+      }
+
+      for (CarePlan careplan : encounter.careplans) {
+        careplan(personEntry, bundle, encounterEntry, careplan);
+      }
+
+      for (ImagingStudy imagingStudy : encounter.imagingStudies) {
+        imagingStudy(personEntry, bundle, encounterEntry, imagingStudy);
+      }
+
+      // one claim per encounter
+      BundleEntryComponent encounterClaim = encounterClaim(personEntry, bundle,
+              encounterEntry, encounter.claim);
+
+      explanationOfBenefit(personEntry,bundle,encounterEntry,person,
+              encounterClaim, encounter);
+    }
+    return bundle;
+  }
   /**
    * Convert the given Person into a JSON String, containing a FHIR Bundle of the Person and the
    * associated entries from their health record.
    *
    * @param person Person to generate the FHIR JSON for
    * @param stopTime Time the simulation ended
-   * @return String containing a JSON representation of a FHIR Bundle containing the Person's 
+   * @return String containing a JSON representation of a FHIR Bundle containing the Person's
    *     health record.
    */
   public static String convertToFHIRJson(Person person, long stopTime) {
     Bundle bundle = convertToFHIR(person, stopTime);
     String bundleJson = FHIR_CTX.newJsonParser().setPrettyPrint(true)
-        .encodeResourceToString(bundle);
+            .encodeResourceToString(bundle);
+    return bundleJson;
+  }
+
+  public static String convertToFHIRNDJson(Person person, long stopTime) {
+    Bundle bundle = convertToFHIR(person, stopTime);
+    String bundleJson = FHIR_CTX.newJsonParser().setPrettyPrint(false)
+            .encodeResourceToString(bundle);
+    return bundleJson;
+  }
+
+  public static String convertToFHIRNDJsonCustom(Person person, long stopTime, BundleType btype, boolean pretty) {
+    Bundle bundle = convertToFHIRCustom(person, stopTime, btype);
+    String bundleJson = FHIR_CTX.newJsonParser().setPrettyPrint(pretty)
+            .encodeResourceToString(bundle);
     return bundleJson;
   }
 
@@ -301,39 +370,39 @@ public class FhirStu3 {
     Patient patientResource = new Patient();
 
     patientResource.addIdentifier().setSystem("https://github.com/synthetichealth/synthea")
-        .setValue((String) person.attributes.get(Person.ID));
+            .setValue((String) person.attributes.get(Person.ID));
 
     Code mrnCode = new Code("http://hl7.org/fhir/v2/0203", "MR", "Medical Record Number");
     patientResource.addIdentifier()
-        .setType(mapCodeToCodeableConcept(mrnCode, "http://hl7.org/fhir/v2/0203"))
-        .setSystem("http://hospital.smarthealthit.org")
-        .setValue((String) person.attributes.get(Person.ID));
+            .setType(mapCodeToCodeableConcept(mrnCode, "http://hl7.org/fhir/v2/0203"))
+            .setSystem("http://hospital.smarthealthit.org")
+            .setValue((String) person.attributes.get(Person.ID));
 
     Code ssnCode = new Code("http://hl7.org/fhir/identifier-type", "SB", "Social Security Number");
     patientResource.addIdentifier()
-        .setType(mapCodeToCodeableConcept(ssnCode, "http://hl7.org/fhir/identifier-type"))
-        .setSystem("http://hl7.org/fhir/sid/us-ssn")
-        .setValue((String) person.attributes.get(Person.IDENTIFIER_SSN));
+            .setType(mapCodeToCodeableConcept(ssnCode, "http://hl7.org/fhir/identifier-type"))
+            .setSystem("http://hl7.org/fhir/sid/us-ssn")
+            .setValue((String) person.attributes.get(Person.IDENTIFIER_SSN));
 
     if (person.attributes.get(Person.IDENTIFIER_DRIVERS) != null) {
       Code driversCode = new Code("http://hl7.org/fhir/v2/0203", "DL", "Driver's License");
       patientResource.addIdentifier()
-          .setType(mapCodeToCodeableConcept(driversCode, "http://hl7.org/fhir/v2/0203"))
-          .setSystem("urn:oid:2.16.840.1.113883.4.3.25")
-          .setValue((String) person.attributes.get(Person.IDENTIFIER_DRIVERS));
+              .setType(mapCodeToCodeableConcept(driversCode, "http://hl7.org/fhir/v2/0203"))
+              .setSystem("urn:oid:2.16.840.1.113883.4.3.25")
+              .setValue((String) person.attributes.get(Person.IDENTIFIER_DRIVERS));
     }
 
     if (person.attributes.get(Person.IDENTIFIER_PASSPORT) != null) {
       Code passportCode = new Code("http://hl7.org/fhir/v2/0203", "PPN", "Passport Number");
       patientResource.addIdentifier()
-          .setType(mapCodeToCodeableConcept(passportCode, "http://hl7.org/fhir/v2/0203"))
-          .setSystem(SHR_EXT + "passportNumber")
-          .setValue((String) person.attributes.get(Person.IDENTIFIER_PASSPORT));
+              .setType(mapCodeToCodeableConcept(passportCode, "http://hl7.org/fhir/v2/0203"))
+              .setSystem(SHR_EXT + "passportNumber")
+              .setValue((String) person.attributes.get(Person.IDENTIFIER_PASSPORT));
     }
 
     // We do not yet account for mixed race
     Extension raceExtension = new Extension(
-        "http://hl7.org/fhir/us/core/StructureDefinition/us-core-race");
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-race");
     String race = (String) person.attributes.get(Person.RACE);
 
     String raceDisplay;
@@ -376,7 +445,7 @@ public class FhirStu3 {
 
     // We do not yet account for mixed ethnicity
     Extension ethnicityExtension = new Extension(
-        "http://hl7.org/fhir/us/core/StructureDefinition/us-core-ethnicity");
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-ethnicity");
     String ethnicity = (String) person.attributes.get(Person.ETHNICITY);
 
     String ethnicityDisplay;
@@ -409,11 +478,11 @@ public class FhirStu3 {
     String firstLanguage = (String) person.attributes.get(Person.FIRST_LANGUAGE);
     Map languageMap = (Map) languageLookup.get(firstLanguage);
     Code languageCode = new Code((String) languageMap.get("system"),
-        (String) languageMap.get("code"), (String) languageMap.get("display"));
+            (String) languageMap.get("code"), (String) languageMap.get("display"));
     List<PatientCommunicationComponent> communication =
-        new ArrayList<PatientCommunicationComponent>();
+            new ArrayList<PatientCommunicationComponent>();
     communication.add(new PatientCommunicationComponent(
-        mapCodeToCodeableConcept(languageCode, (String) languageMap.get("system"))));
+            mapCodeToCodeableConcept(languageCode, (String) languageMap.get("system"))));
     patientResource.setCommunication(communication);
 
     HumanName name = patientResource.addName();
@@ -440,7 +509,7 @@ public class FhirStu3 {
     }
 
     Extension mothersMaidenNameExtension = new Extension(
-        "http://hl7.org/fhir/StructureDefinition/patient-mothersMaidenName");
+            "http://hl7.org/fhir/StructureDefinition/patient-mothersMaidenName");
     String mothersMaidenName = (String) person.attributes.get(Person.NAME_MOTHER);
     mothersMaidenNameExtension.setValue(new StringType(mothersMaidenName));
     patientResource.addExtension(mothersMaidenNameExtension);
@@ -449,7 +518,7 @@ public class FhirStu3 {
     patientResource.setBirthDate(new Date(birthdate));
 
     Extension birthSexExtension = new Extension(
-        "http://hl7.org/fhir/us/core/StructureDefinition/us-core-birthsex");
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-birthsex");
     if (person.attributes.get(Person.GENDER).equals("M")) {
       patientResource.setGender(AdministrativeGender.MALE);
       birthSexExtension.setValue(new CodeType("M"));
@@ -463,9 +532,9 @@ public class FhirStu3 {
 
     Address addrResource = patientResource.addAddress();
     addrResource.addLine((String) person.attributes.get(Person.ADDRESS))
-        .setCity((String) person.attributes.get(Person.CITY))
-        .setPostalCode((String) person.attributes.get(Person.ZIP))
-        .setState(state);
+            .setCity((String) person.attributes.get(Person.CITY))
+            .setPostalCode((String) person.attributes.get(Person.ZIP))
+            .setState(state);
     if (COUNTRY_CODE != null) {
       addrResource.setCountry(COUNTRY_CODE);
     }
@@ -476,32 +545,32 @@ public class FhirStu3 {
             .setCountry((String) person.attributes.get(Person.BIRTH_COUNTRY));
 
     Extension birthplaceExtension = new Extension(
-        "http://hl7.org/fhir/StructureDefinition/birthPlace");
+            "http://hl7.org/fhir/StructureDefinition/birthPlace");
     birthplaceExtension.setValue(birthplace);
     patientResource.addExtension(birthplaceExtension);
 
     if (person.attributes.get(Person.MULTIPLE_BIRTH_STATUS) != null) {
       patientResource.setMultipleBirth(
-          new IntegerType((int) person.attributes.get(Person.MULTIPLE_BIRTH_STATUS)));
+              new IntegerType((int) person.attributes.get(Person.MULTIPLE_BIRTH_STATUS)));
     } else {
       patientResource.setMultipleBirth(new BooleanType(false));
     }
 
     patientResource.addTelecom().setSystem(ContactPoint.ContactPointSystem.PHONE)
-        .setUse(ContactPoint.ContactPointUse.HOME)
-        .setValue((String) person.attributes.get(Person.TELECOM));
+            .setUse(ContactPoint.ContactPointUse.HOME)
+            .setValue((String) person.attributes.get(Person.TELECOM));
 
     String maritalStatus = ((String) person.attributes.get(Person.MARITAL_STATUS));
     if (maritalStatus != null) {
       Code maritalStatusCode = new Code("http://hl7.org/fhir/v3/MaritalStatus", maritalStatus,
-          maritalStatus);
+              maritalStatus);
       patientResource.setMaritalStatus(
-          mapCodeToCodeableConcept(maritalStatusCode, "http://hl7.org/fhir/v3/MaritalStatus"));
+              mapCodeToCodeableConcept(maritalStatusCode, "http://hl7.org/fhir/v3/MaritalStatus"));
     } else {
       Code maritalStatusCode = new Code("http://hl7.org/fhir/v3/MaritalStatus", "S",
-          "Never Married");
+              "Never Married");
       patientResource.setMaritalStatus(
-          mapCodeToCodeableConcept(maritalStatusCode, "http://hl7.org/fhir/v3/MaritalStatus"));
+              mapCodeToCodeableConcept(maritalStatusCode, "http://hl7.org/fhir/v3/MaritalStatus"));
     }
 
     DirectPosition2D coord = person.getLatLon();
@@ -514,16 +583,16 @@ public class FhirStu3 {
 
     if (!person.alive(stopTime)) {
       patientResource.setDeceased(
-          convertFhirDateTime(person.events.event(Event.DEATH).time, true));
+              convertFhirDateTime(person.events.event(Event.DEATH).time, true));
     }
 
     String generatedBySynthea = "Generated by <a href=\"https://github.com/synthetichealth/synthea\">Synthea</a>."
-        + "Version identifier: " + Utilities.SYNTHEA_VERSION + " . "
-        + "  Person seed: " + person.seed
-        + "  Population seed: " + person.populationSeed;
+            + "Version identifier: " + Utilities.SYNTHEA_VERSION + " . "
+            + "  Person seed: " + person.seed
+            + "  Population seed: " + person.populationSeed;
 
     patientResource.setText(new Narrative().setStatus(NarrativeStatus.GENERATED)
-        .setDiv(new XhtmlNode(NodeType.Element).setValue(generatedBySynthea)));
+            .setDiv(new XhtmlNode(NodeType.Element).setValue(generatedBySynthea)));
 
     if (USE_SHR_EXTENSIONS) {
 
@@ -533,26 +602,26 @@ public class FhirStu3 {
       // MothersMaidenName, FathersName, Person-extension
 
       patientResource.addExtension()
-        .setUrl(SHR_EXT + "shr-actor-FictionalPerson-extension")
-        .setValue(new BooleanType(true));
+              .setUrl(SHR_EXT + "shr-actor-FictionalPerson-extension")
+              .setValue(new BooleanType(true));
 
       String fathersName = (String) person.attributes.get(Person.NAME_FATHER);
       Extension fathersNameExtension = new Extension(
-          SHR_EXT + "shr-entity-FathersName-extension", new HumanName().setText(fathersName));
+              SHR_EXT + "shr-entity-FathersName-extension", new HumanName().setText(fathersName));
       patientResource.addExtension(fathersNameExtension);
 
       String ssn = (String) person.attributes.get(Person.IDENTIFIER_SSN);
       Extension ssnExtension = new Extension(
-          SHR_EXT + "shr-demographics-SocialSecurityNumber-extension",
-          new StringType(ssn));
+              SHR_EXT + "shr-demographics-SocialSecurityNumber-extension",
+              new StringType(ssn));
       patientResource.addExtension(ssnExtension);
 
       Basic personResource = new Basic();
       // the only required field on this patient resource is code
 
       Coding fixedCode = new Coding(
-          "http://standardhealthrecord.org/fhir/basic-resource-type",
-          "shr-entity-Person", "shr-entity-Person");
+              "http://standardhealthrecord.org/fhir/basic-resource-type",
+              "shr-entity-Person", "shr-entity-Person");
       personResource.setCode(new CodeableConcept().addCoding(fixedCode));
 
       Meta personMeta = new Meta();
@@ -561,8 +630,8 @@ public class FhirStu3 {
 
       BundleEntryComponent personEntry = newEntry(bundle, personResource);
       patientResource.addExtension()
-          .setUrl(SHR_EXT + "shr-entity-Person-extension")
-          .setValue(new Reference(personEntry.getFullUrl()));
+              .setUrl(SHR_EXT + "shr-entity-Person-extension")
+              .setValue(new Reference(personEntry.getFullUrl()));
     }
 
     // DALY and QALY values
@@ -593,7 +662,7 @@ public class FhirStu3 {
    * @return The added Entry
    */
   private static BundleEntryComponent encounter(Person person, BundleEntryComponent personEntry,
-      Bundle bundle, Encounter encounter) {
+                                                Bundle bundle, Encounter encounter) {
     org.hl7.fhir.dstu3.model.Encounter encounterResource = new org.hl7.fhir.dstu3.model.Encounter();
 
     encounterResource.setSubject(new Reference(personEntry.getFullUrl()));
@@ -601,7 +670,7 @@ public class FhirStu3 {
     if (encounter.codes.isEmpty()) {
       // wellness encounter
       encounterResource.addType().addCoding().setCode("185349003")
-          .setDisplay("Encounter for check up").setSystem(SNOMED_URI);
+              .setDisplay("Encounter for check up").setSystem(SNOMED_URI);
 
     } else {
       Code code = encounter.codes.get(0);
@@ -613,13 +682,13 @@ public class FhirStu3 {
     classCode.setSystem("http://terminology.hl7.org/CodeSystem/v3-ActCode");
     encounterResource.setClass_(classCode);
     encounterResource
-        .setPeriod(new Period()
-            .setStart(new Date(encounter.start))
-            .setEnd(new Date(encounter.stop)));
+            .setPeriod(new Period()
+                    .setStart(new Date(encounter.start))
+                    .setEnd(new Date(encounter.stop)));
 
     if (encounter.reason != null) {
       encounterResource.addReason().addCoding().setCode(encounter.reason.code)
-          .setDisplay(encounter.reason.display).setSystem(SNOMED_URI);
+              .setDisplay(encounter.reason.display).setSystem(SNOMED_URI);
     }
 
     if (encounter.provider != null) {
@@ -657,22 +726,22 @@ public class FhirStu3 {
     if (encounter.discharge != null) {
       EncounterHospitalizationComponent hospitalization = new EncounterHospitalizationComponent();
       Code dischargeDisposition = new Code(DISCHARGE_URI, encounter.discharge.code,
-          encounter.discharge.display);
+              encounter.discharge.display);
       hospitalization
-          .setDischargeDisposition(mapCodeToCodeableConcept(dischargeDisposition, DISCHARGE_URI));
+              .setDischargeDisposition(mapCodeToCodeableConcept(dischargeDisposition, DISCHARGE_URI));
       encounterResource.setHospitalization(hospitalization);
     }
 
     if (USE_SHR_EXTENSIONS) {
       encounterResource.setMeta(
-          new Meta().addProfile(SHR_EXT + "shr-encounter-EncounterPerformed"));
+              new Meta().addProfile(SHR_EXT + "shr-encounter-EncounterPerformed"));
       // required fields for this profile are status & action-PerformedContext-extension
 
       Extension performedContext = new Extension();
       performedContext.setUrl(SHR_EXT + "shr-action-PerformedContext-extension");
       performedContext.addExtension(
-          SHR_EXT + "shr-action-Status-extension",
-          new CodeType("finished"));
+              SHR_EXT + "shr-action-Status-extension",
+              new CodeType("finished"));
 
       encounterResource.addExtension(performedContext);
     }
@@ -728,11 +797,11 @@ public class FhirStu3 {
    * @return the added Entry
    */
   private static BundleEntryComponent medicationClaim(BundleEntryComponent personEntry,
-      Bundle bundle, BundleEntryComponent encounterEntry, Claim claim,
-      BundleEntryComponent medicationEntry) {
+                                                      Bundle bundle, BundleEntryComponent encounterEntry, Claim claim,
+                                                      BundleEntryComponent medicationEntry) {
     org.hl7.fhir.dstu3.model.Claim claimResource = new org.hl7.fhir.dstu3.model.Claim();
     org.hl7.fhir.dstu3.model.Encounter encounterResource =
-        (org.hl7.fhir.dstu3.model.Encounter) encounterEntry.getResource();
+            (org.hl7.fhir.dstu3.model.Encounter) encounterEntry.getResource();
 
     claimResource.setStatus(ClaimStatus.ACTIVE);
     claimResource.setUse(org.hl7.fhir.dstu3.model.Claim.Use.COMPLETE);
@@ -745,7 +814,7 @@ public class FhirStu3 {
 
     // add item for encounter
     claimResource.addItem(new org.hl7.fhir.dstu3.model.Claim.ItemComponent(new PositiveIntType(1))
-        .addEncounter(new Reference(encounterEntry.getFullUrl())));
+            .addEncounter(new Reference(encounterEntry.getFullUrl())));
 
     // add prescription.
     claimResource.setPrescription(new Reference(medicationEntry.getFullUrl()));
@@ -769,10 +838,10 @@ public class FhirStu3 {
    * @return the added Entry
    */
   private static BundleEntryComponent encounterClaim(BundleEntryComponent personEntry,
-      Bundle bundle, BundleEntryComponent encounterEntry, Claim claim) {
+                                                     Bundle bundle, BundleEntryComponent encounterEntry, Claim claim) {
     org.hl7.fhir.dstu3.model.Claim claimResource = new org.hl7.fhir.dstu3.model.Claim();
     org.hl7.fhir.dstu3.model.Encounter encounterResource =
-        (org.hl7.fhir.dstu3.model.Encounter) encounterEntry.getResource();
+            (org.hl7.fhir.dstu3.model.Encounter) encounterEntry.getResource();
     claimResource.setStatus(ClaimStatus.ACTIVE);
     claimResource.setUse(org.hl7.fhir.dstu3.model.Claim.Use.COMPLETE);
 
@@ -784,7 +853,7 @@ public class FhirStu3 {
 
     // add item for encounter
     claimResource.addItem(new ItemComponent(new PositiveIntType(1))
-        .addEncounter(new Reference(encounterEntry.getFullUrl())));
+            .addEncounter(new Reference(encounterEntry.getFullUrl())));
 
     int itemSequence = 2;
     int conditionSequence = 1;
@@ -798,10 +867,10 @@ public class FhirStu3 {
         Code primaryCode = item.codes.get(0);
         String system = ExportHelper.getSystemURI(primaryCode.system);
         CodeableConcept serviceProvided = new CodeableConcept()
-            .addCoding(new Coding()
-                .setCode(primaryCode.code)
-                .setVersion("v1")
-                .setSystem(system));
+                .addCoding(new Coding()
+                        .setCode(primaryCode.code)
+                        .setVersion("v1")
+                        .setSystem(system));
         claimItem.setService(serviceProvided);
         // calculate the cost of the procedure
         Money moneyResource = new Money();
@@ -813,7 +882,7 @@ public class FhirStu3 {
         if (item instanceof HealthRecord.Procedure) {
           Type procedureReference = new Reference(item.fullUrl);
           ProcedureComponent claimProcedure = new ProcedureComponent(
-              new PositiveIntType(procedureSequence), procedureReference);
+                  new PositiveIntType(procedureSequence), procedureReference);
           claimResource.addProcedure(claimProcedure);
           claimItem.addProcedureLinkId(procedureSequence);
 
@@ -825,8 +894,8 @@ public class FhirStu3 {
           informationComponent.setValue(informationReference);
           CodeableConcept category = new CodeableConcept();
           category.getCodingFirstRep()
-            .setSystem("http://hl7.org/fhir/claiminformationcategory")
-            .setCode("info");
+                  .setSystem("http://hl7.org/fhir/claiminformationcategory")
+                  .setCode("info");
           informationComponent.setCategory(category);
           claimResource.addInformation(informationComponent);
           claimItem.addInformationLinkId(informationSequence);
@@ -840,8 +909,8 @@ public class FhirStu3 {
         // add diagnosisComponent to claim
         Reference diagnosisReference = new Reference(item.fullUrl);
         org.hl7.fhir.dstu3.model.Claim.DiagnosisComponent diagnosisComponent =
-            new org.hl7.fhir.dstu3.model.Claim.DiagnosisComponent(
-                new PositiveIntType(conditionSequence), diagnosisReference);
+                new org.hl7.fhir.dstu3.model.Claim.DiagnosisComponent(
+                        new PositiveIntType(conditionSequence), diagnosisReference);
         claimResource.addDiagnosis(diagnosisComponent);
 
         // update claimItems with diagnosis
@@ -895,9 +964,9 @@ public class FhirStu3 {
    * @return the added entry
    */
   private static BundleEntryComponent explanationOfBenefit(BundleEntryComponent personEntry,
-                                           Bundle bundle, BundleEntryComponent encounterEntry,
-                                           Person person, BundleEntryComponent claimEntry,
-                                           Encounter encounter) {
+                                                           Bundle bundle, BundleEntryComponent encounterEntry,
+                                                           Person person, BundleEntryComponent claimEntry,
+                                                           Encounter encounter) {
     boolean inpatient = false;
     boolean outpatient = false;
     EncounterType type = EncounterType.fromString(encounter.type);
@@ -910,7 +979,7 @@ public class FhirStu3 {
     }
     ExplanationOfBenefit eob = new ExplanationOfBenefit();
     org.hl7.fhir.dstu3.model.Encounter encounterResource =
-        (org.hl7.fhir.dstu3.model.Encounter) encounterEntry.getResource();
+            (org.hl7.fhir.dstu3.model.Encounter) encounterEntry.getResource();
 
     Meta meta = new Meta();
     if (inpatient) {
@@ -926,162 +995,162 @@ public class FhirStu3 {
       //https://www.cms.gov/Medicare/Medicare-Fee-for-Service-Payment/AcuteInpatientPPS/Indirect-Medical-Education-IME
       // Extra cost for educational hospitals
       eob.addExtension(createMoneyExtension(
-          "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-ime-op-clm-val-amt-extension",
-          400));
+              "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-ime-op-clm-val-amt-extension",
+              400));
 
       // DSH payment-- Massachusetts does not make DSH payments at all, so set to 0 for now
       // https://www.cms.gov/Medicare/Medicare-Fee-for-Service-Payment/AcuteInpatientPPS/dsh
       eob.addExtension(createMoneyExtension(
-          "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-dsh-op-clm-val-amt-extension",
-          0));
+              "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-dsh-op-clm-val-amt-extension",
+              0));
 
       // The pass through per diem rate
       // not really defined by CMS
       eob.addExtension(createMoneyExtension(
-          "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-clm-pass-thru-per-diem-amt-extension",
-          0));
+              "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-clm-pass-thru-per-diem-amt-extension",
+              0));
 
       // Professional charge
       eob.addExtension(createMoneyExtension(
-          "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-nch-profnl-cmpnt-chrg-amt-extension",
-          0));
+              "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-nch-profnl-cmpnt-chrg-amt-extension",
+              0));
 
       // total claim PPS charge
       eob.addExtension(createMoneyExtension(
-          "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-clm-tot-pps-cptl-amt-extension",
-          0));
+              "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-clm-tot-pps-cptl-amt-extension",
+              0));
 
       // Deductible Amount
       eob.addExtension(createMoneyExtension(
-          "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-nch-bene-ip-ddctbl-amt-extension",
-          0));
+              "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-nch-bene-ip-ddctbl-amt-extension",
+              0));
 
       // Coinsurance Liability
       eob.addExtension(createMoneyExtension(
-          "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-nch-bene-pta-coinsrnc-lblty-amt-extension",
-          0));
+              "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-nch-bene-pta-coinsrnc-lblty-amt-extension",
+              0));
 
       // Non-covered Charge Amount
       eob.addExtension(createMoneyExtension(
-          "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-nch-ip-ncvrd-chrg-amt-extension",
-          0));
+              "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-nch-ip-ncvrd-chrg-amt-extension",
+              0));
 
       // Total Deductible/Coinsurance Amount
       eob.addExtension(createMoneyExtension(
-          "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-nch-ip-tot-ddctn-amt-extension",
-          0));
+              "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-nch-ip-tot-ddctn-amt-extension",
+              0));
 
       // PPS Capital DSH Amount
       eob.addExtension(createMoneyExtension(
-          "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-clm-pps-cptl-dsprprtnt-shr-amt-extension",
-          0));
+              "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-clm-pps-cptl-dsprprtnt-shr-amt-extension",
+              0));
 
       // PPS Capital Exception Amount
       eob.addExtension(createMoneyExtension(
-          "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-clm-pps-cptl-excptn-amt-extension",
-          0));
+              "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-clm-pps-cptl-excptn-amt-extension",
+              0));
 
       // PPS FSP
       eob.addExtension(createMoneyExtension(
-          "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-clm-pps-cptl-fsp-amt-extension",
-          0));
+              "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-clm-pps-cptl-fsp-amt-extension",
+              0));
 
       // PPS IME
       eob.addExtension(createMoneyExtension(
-          "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-clm-pps-cptl-ime-amt-extension",
-          400));
+              "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-clm-pps-cptl-ime-amt-extension",
+              400));
 
       // PPS Capital Outlier Amount
       eob.addExtension(createMoneyExtension(
-          "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-clm-pps-cptl-outlier-amt-extension",
-          0));
+              "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-clm-pps-cptl-outlier-amt-extension",
+              0));
 
       // Old capital hold harmless amount
       eob.addExtension(createMoneyExtension(
-          "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-clm-pps-old-cptl-hld-hrmls-amt-extension",
-          0));
+              "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-clm-pps-old-cptl-hld-hrmls-amt-extension",
+              0));
 
       // NCH DRG Outlier Approved Payment Amount
       eob.addExtension(createMoneyExtension(
-          "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-nch-drg-outlier-aprvd-pmt-amt-extension",
-          0));
+              "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-nch-drg-outlier-aprvd-pmt-amt-extension",
+              0));
 
       // NCH Beneficiary Blood Deductible Liability Amount
       eob.addExtension(createMoneyExtension(
-          "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-nch-bene-blood-ddctbl-lblty-am-extension",
-          0));
+              "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-nch-bene-blood-ddctbl-lblty-am-extension",
+              0));
 
       // Non-payment reason
       eob.addExtension()
-          .setUrl("https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-clm-mdcr-non-pmt-rsn-cd-extension")
-          .setValue(new Coding()
-              .setSystem("https://bluebutton.cms.gov/assets/ig/CodeSystem-clm-mdcr-non-pmt-rsn-cd")
-              .setDisplay("All other reasons for non-payment")
-              .setCode("N"));
+              .setUrl("https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-clm-mdcr-non-pmt-rsn-cd-extension")
+              .setValue(new Coding()
+                      .setSystem("https://bluebutton.cms.gov/assets/ig/CodeSystem-clm-mdcr-non-pmt-rsn-cd")
+                      .setDisplay("All other reasons for non-payment")
+                      .setCode("N"));
 
       // Prepayment
       eob.addExtension(createMoneyExtension(
-          "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-prpayamt-extension",
-          0));
+              "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-prpayamt-extension",
+              0));
 
       // FI or MAC number
       eob.addExtension()
-          .setUrl("https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-fi-num-extension")
-          .setValue(new Identifier()
-              .setValue("002000")
-              // No system page exists yet
-              .setSystem("https://bluebutton.cms.gov/assets/ig/CodeSystem-fi-num"));
+              .setUrl("https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-fi-num-extension")
+              .setValue(new Identifier()
+                      .setValue("002000")
+                      // No system page exists yet
+                      .setSystem("https://bluebutton.cms.gov/assets/ig/CodeSystem-fi-num"));
     } else if (outpatient) {
       // Professional component charge amount
       eob.addExtension(createMoneyExtension(
-          "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-outpatient-nch-profnl-cmpnt-chrg-amt-extension",
-          0));
+              "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-outpatient-nch-profnl-cmpnt-chrg-amt-extension",
+              0));
 
       // Deductible amount
       eob.addExtension(createMoneyExtension(
-          "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-outpatient-nch-bene-ptb-ddctbl-amt-extension",
-          0));
+              "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-outpatient-nch-bene-ptb-ddctbl-amt-extension",
+              0));
 
       // Coinsurance amount
       eob.addExtension(createMoneyExtension(
-          "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-outpatient-nch-bene-ptb-coinsrnc-amt-extension",
-          0));
+              "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-outpatient-nch-bene-ptb-coinsrnc-amt-extension",
+              0));
 
       // Provider Payment
       eob.addExtension(createMoneyExtension(
-          "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-outpatient-clm-op-prvdr-pmt-amt-extension",
-          0));
+              "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-outpatient-clm-op-prvdr-pmt-amt-extension",
+              0));
 
       // Beneficiary payment
       eob.addExtension(createMoneyExtension(
-          "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-outpatient-clm-op-bene-pmt-amt-extension",
-          0));
+              "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-outpatient-clm-op-bene-pmt-amt-extension",
+              0));
 
       // Beneficiary Blood Deductible Liability Amount
       eob.addExtension(createMoneyExtension(
-          "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-outpatient-nch-bene-blood-ddctbl-lblty-am-extension",
-          0));
+              "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-outpatient-nch-bene-blood-ddctbl-lblty-am-extension",
+              0));
 
       // Claim Medicare Non Payment Reason Code
       eob.addExtension()
-          .setUrl("https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-outpatient-clm-mdcr-non-pmt-rsn-cd-extension")
-          .setValue(new Coding()
-              .setDisplay("All other reasons for non-payment")
-              .setSystem("https://bluebutton.cms.gov/assets/ig/CodeSystem-clm-mdcr-non-pmt-rsn-cd")
-              .setCode("N"));
+              .setUrl("https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-outpatient-clm-mdcr-non-pmt-rsn-cd-extension")
+              .setValue(new Coding()
+                      .setDisplay("All other reasons for non-payment")
+                      .setSystem("https://bluebutton.cms.gov/assets/ig/CodeSystem-clm-mdcr-non-pmt-rsn-cd")
+                      .setCode("N"));
 
       // NCH Primary Payer Claim Paid Amount
       eob.addExtension(createMoneyExtension(
-          "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-outpatient-prpayamt-extension",
-          0));
+              "https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-outpatient-prpayamt-extension",
+              0));
 
       // FI or MAC number
       eob.addExtension()
-          .setUrl("https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-outpatient-fi-num-extension")
-          .setValue(new Identifier()
-              .setValue("002000")
-              // No system page exists yet
-              .setSystem("https://bluebutton.cms.gov/assets/ig/CodeSystem-fi-num"));
+              .setUrl("https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-outpatient-fi-num-extension")
+              .setValue(new Identifier()
+                      .setValue("002000")
+                      // No system page exists yet
+                      .setSystem("https://bluebutton.cms.gov/assets/ig/CodeSystem-fi-num"));
     }
 
     // according to CMS guidelines claims have 12 months to be
@@ -1092,24 +1161,24 @@ public class FhirStu3 {
     cal.add(Calendar.YEAR,1);
 
     Period billablePeriod = new Period()
-        .setStart(encounterResource
-            .getPeriod()
-            .getEnd())
-        .setEnd(cal.getTime());
+            .setStart(encounterResource
+                    .getPeriod()
+                    .getEnd())
+            .setEnd(cal.getTime());
     if (inpatient) {
       billablePeriod.addExtension(new Extension()
-          .setUrl("https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-claim-query-cd-extension")
-          .setValue(new Coding()
-              .setCode("3")
-              .setSystem("https://bluebutton.cms.gov/assets/ig/ValueSet-claim-query-cd")
-              .setDisplay("Final Bill")));
+              .setUrl("https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-claim-query-cd-extension")
+              .setValue(new Coding()
+                      .setCode("3")
+                      .setSystem("https://bluebutton.cms.gov/assets/ig/ValueSet-claim-query-cd")
+                      .setDisplay("Final Bill")));
     } else if (outpatient) {
       billablePeriod.addExtension(new Extension()
-          .setUrl("https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-outpatient-claim-query-cd-extension")
-          .setValue(new Coding()
-              .setCode("3")
-              .setSystem("https://bluebutton.cms.gov/assets/ig/ValueSet-claim-query-cd")
-              .setDisplay("Final Bill")));
+              .setUrl("https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-outpatient-claim-query-cd-extension")
+              .setValue(new Coding()
+                      .setCode("3")
+                      .setSystem("https://bluebutton.cms.gov/assets/ig/ValueSet-claim-query-cd")
+                      .setDisplay("Final Bill")));
     }
 
     eob.setBillablePeriod(billablePeriod);
@@ -1140,24 +1209,24 @@ public class FhirStu3 {
     coverage.setType(new CodeableConcept().setText(insurance));
     eob.addContained(coverage);
     ExplanationOfBenefit.InsuranceComponent insuranceComponent =
-        new ExplanationOfBenefit.InsuranceComponent();
+            new ExplanationOfBenefit.InsuranceComponent();
     insuranceComponent.setCoverage(new Reference("#coverage"));
     eob.setInsurance(insuranceComponent);
 
     org.hl7.fhir.dstu3.model.Claim claim =
-        (org.hl7.fhir.dstu3.model.Claim) claimEntry.getResource();
+            (org.hl7.fhir.dstu3.model.Claim) claimEntry.getResource();
     eob.addIdentifier()
-        .setSystem("https://bluebutton.cms.gov/resources/variables/clm_id")
-        .setValue(claim.getId());
+            .setSystem("https://bluebutton.cms.gov/resources/variables/clm_id")
+            .setValue(claim.getId());
     // Hardcoded group id
     eob.addIdentifier()
-        .setSystem("https://bluebutton.cms.gov/resources/identifier/claim-group")
-        .setValue("99999999999");
+            .setSystem("https://bluebutton.cms.gov/resources/identifier/claim-group")
+            .setValue("99999999999");
 
     eob.setStatus(org.hl7.fhir.dstu3.model.ExplanationOfBenefit.ExplanationOfBenefitStatus.ACTIVE);
     if (!inpatient && !outpatient) {
       eob.setClaim(new Reference()
-          .setReference(claimEntry.getFullUrl()));
+              .setReference(claimEntry.getFullUrl()));
       eob.setReferral(new Reference("#1"));
       eob.setCreated(encounterResource.getPeriod().getEnd());
     }
@@ -1166,20 +1235,20 @@ public class FhirStu3 {
     List<ExplanationOfBenefit.DiagnosisComponent> eobDiag = new ArrayList<>();
     for (org.hl7.fhir.dstu3.model.Claim.DiagnosisComponent claimDiagnosis : claim.getDiagnosis()) {
       ExplanationOfBenefit.DiagnosisComponent diagnosisComponent =
-          new ExplanationOfBenefit.DiagnosisComponent();
+              new ExplanationOfBenefit.DiagnosisComponent();
       diagnosisComponent.setDiagnosis(claimDiagnosis.getDiagnosis());
       diagnosisComponent.getType().add(new CodeableConcept()
-          .addCoding(new Coding()
-              .setCode("principal")
-              .setSystem("https://bluebutton.cms.gov/resources/codesystem/diagnosis-type")));
+              .addCoding(new Coding()
+                      .setCode("principal")
+                      .setSystem("https://bluebutton.cms.gov/resources/codesystem/diagnosis-type")));
       diagnosisComponent.setSequence(claimDiagnosis.getSequence());
       diagnosisComponent.setPackageCode(claimDiagnosis.getPackageCode());
       diagnosisComponent.addExtension()
-          .setUrl("https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-clm-poa-ind-sw1-extension")
-          .setValue(new Coding()
-              .setCode("Y")
-              .setSystem("https://bluebutton.cms.gov/assets/ig/CodeSystem-clm-poa-ind-sw1")
-              .setDisplay("Diagnosis present at time of admission"));
+              .setUrl("https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-clm-poa-ind-sw1-extension")
+              .setValue(new Coding()
+                      .setCode("Y")
+                      .setSystem("https://bluebutton.cms.gov/assets/ig/CodeSystem-clm-poa-ind-sw1")
+                      .setDisplay("Diagnosis present at time of admission"));
       eobDiag.add(diagnosisComponent);
     }
     eob.setDiagnosis(eobDiag);
@@ -1208,8 +1277,8 @@ public class FhirStu3 {
 
       if (item.hasService()) {
         itemComponent
-            .setService(item
-                .getService());
+                .setService(item
+                        .getService());
       }
       if (!inpatient && !outpatient) {
         itemComponent.setDiagnosisLinkId(item.getDiagnosisLinkId());
@@ -1218,25 +1287,25 @@ public class FhirStu3 {
         itemComponent.setEncounter(item.getEncounter());
         itemComponent.setServiced(encounterResource.getPeriod());
         itemComponent.setCategory(new CodeableConcept().addCoding(new Coding()
-            .setSystem("https://bluebutton.cms.gov/resources/variables/line_cms_type_srvc_cd")
-            .setCode("1")
-            .setDisplay("Medical care")));
+                .setSystem("https://bluebutton.cms.gov/resources/variables/line_cms_type_srvc_cd")
+                .setCode("1")
+                .setDisplay("Medical care")));
       }
       if (inpatient) {
         itemComponent.addExtension(new Extension()
-            .setUrl("https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-rev-cntr-ndc-qty-extension")
-            .setValue(new Quantity().setValue(0)));
+                .setUrl("https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-inpatient-rev-cntr-ndc-qty-extension")
+                .setValue(new Quantity().setValue(0)));
       } else if (outpatient) {
         itemComponent.addExtension(new Extension()
-            .setUrl("https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-outpatient-rev-cntr-ndc-qty-extension")
-            .setValue(new Quantity().setValue(0)));
+                .setUrl("https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-outpatient-rev-cntr-ndc-qty-extension")
+                .setValue(new Quantity().setValue(0)));
         if (itemComponent.hasService()) {
           itemComponent.getService().addExtension(new Extension()
-              .setUrl("https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-outpatient-rev-cntr-ide-ndc-upc-num-extension")
-              .setValue(new Coding()
-                  .setSystem("https://www.accessdata.fda.gov/scripts/cder/ndc")
-                  .setDisplay("Dummy")
-                  .setCode("0624")));
+                  .setUrl("https://bluebutton.cms.gov/assets/ig/StructureDefinition-bluebutton-outpatient-rev-cntr-ide-ndc-upc-num-extension")
+                  .setValue(new Coding()
+                          .setSystem("https://www.accessdata.fda.gov/scripts/cder/ndc")
+                          .setDisplay("Dummy")
+                          .setCode("0624")));
         }
       }
 
@@ -1272,10 +1341,10 @@ public class FhirStu3 {
           display = "Inpatient Hospital";
       }
       location.addCoding()
-          .setCode(code)
-          //.setSystem("http://hl7.org/fhir/ValueSet/service-place") > if we wanted hl7
-          .setSystem("https://bluebutton.cms.gov/resources/variables/line_place_of_srvc_cd")
-          .setDisplay(display);
+              .setCode(code)
+              //.setSystem("http://hl7.org/fhir/ValueSet/service-place") > if we wanted hl7
+              .setSystem("https://bluebutton.cms.gov/resources/variables/line_place_of_srvc_cd")
+              .setDisplay(display);
       itemComponent.setLocation(location);
 
       // Adjudication
@@ -1284,91 +1353,91 @@ public class FhirStu3 {
         // Assume that the patient has already paid deductible and
         // has 20/80 coinsurance
         ExplanationOfBenefit.AdjudicationComponent coinsuranceAmount =
-            new ExplanationOfBenefit.AdjudicationComponent();
+                new ExplanationOfBenefit.AdjudicationComponent();
         coinsuranceAmount.getCategory()
-            .getCoding()
-            .add(new Coding()
-                .setCode("https://bluebutton.cms.gov/resources/variables/line_coinsrnc_amt")
-                .setSystem("https://bluebutton.cms.gov/resources/codesystem/adjudication")
-                .setDisplay("Line Beneficiary Coinsurance Amount"));
+                .getCoding()
+                .add(new Coding()
+                        .setCode("https://bluebutton.cms.gov/resources/variables/line_coinsrnc_amt")
+                        .setSystem("https://bluebutton.cms.gov/resources/codesystem/adjudication")
+                        .setDisplay("Line Beneficiary Coinsurance Amount"));
         coinsuranceAmount.getAmount()
-            .setValue(0.2 * item.getNet().getValue().doubleValue()) //20% coinsurance
-            .setSystem("urn:iso:std:iso:4217") //USD
-            .setCode("USD");
+                .setValue(0.2 * item.getNet().getValue().doubleValue()) //20% coinsurance
+                .setSystem("urn:iso:std:iso:4217") //USD
+                .setCode("USD");
 
         ExplanationOfBenefit.AdjudicationComponent lineProviderAmount =
-            new ExplanationOfBenefit.AdjudicationComponent();
+                new ExplanationOfBenefit.AdjudicationComponent();
         lineProviderAmount.getCategory()
-            .getCoding()
-            .add(new Coding()
-                .setCode("https://bluebutton.cms.gov/resources/variables/line_prvdr_pmt_amt")
-                .setSystem("https://bluebutton.cms.gov/resources/codesystem/adjudication")
-                .setDisplay("Line Provider Payment Amount"));
+                .getCoding()
+                .add(new Coding()
+                        .setCode("https://bluebutton.cms.gov/resources/variables/line_prvdr_pmt_amt")
+                        .setSystem("https://bluebutton.cms.gov/resources/codesystem/adjudication")
+                        .setDisplay("Line Provider Payment Amount"));
         lineProviderAmount.getAmount()
-            .setValue(0.8 * item.getNet().getValue().doubleValue())
-            .setSystem("urn:iso:std:iso:4217")
-            .setCode("USD");
+                .setValue(0.8 * item.getNet().getValue().doubleValue())
+                .setSystem("urn:iso:std:iso:4217")
+                .setCode("USD");
 
         // assume the allowed and submitted amounts are the same for now
         ExplanationOfBenefit.AdjudicationComponent submittedAmount =
-            new ExplanationOfBenefit.AdjudicationComponent();
+                new ExplanationOfBenefit.AdjudicationComponent();
         submittedAmount.getCategory()
-            .getCoding()
-            .add(new Coding()
-                .setCode("https://bluebutton.cms.gov/resources/variables/line_sbmtd_chrg_amt")
-                .setSystem("https://bluebutton.cms.gov/resources/codesystem/adjudication")
-                .setDisplay("Line Submitted Charge Amount"));
+                .getCoding()
+                .add(new Coding()
+                        .setCode("https://bluebutton.cms.gov/resources/variables/line_sbmtd_chrg_amt")
+                        .setSystem("https://bluebutton.cms.gov/resources/codesystem/adjudication")
+                        .setDisplay("Line Submitted Charge Amount"));
         submittedAmount.getAmount()
-            .setValue(item.getNet().getValue())
-            .setSystem("urn:iso:std:iso:4217")
-            .setCode("USD");
+                .setValue(item.getNet().getValue())
+                .setSystem("urn:iso:std:iso:4217")
+                .setCode("USD");
 
         ExplanationOfBenefit.AdjudicationComponent allowedAmount =
-            new ExplanationOfBenefit.AdjudicationComponent();
+                new ExplanationOfBenefit.AdjudicationComponent();
         allowedAmount.getCategory()
-            .getCoding()
-            .add(new Coding()
-                .setCode("https://bluebutton.cms.gov/resources/variables/line_alowd_chrg_amt")
-                .setSystem("https://bluebutton.cms.gov/resources/codesystem/adjudication")
-                .setDisplay("Line Allowed Charge Amount"));
+                .getCoding()
+                .add(new Coding()
+                        .setCode("https://bluebutton.cms.gov/resources/variables/line_alowd_chrg_amt")
+                        .setSystem("https://bluebutton.cms.gov/resources/codesystem/adjudication")
+                        .setDisplay("Line Allowed Charge Amount"));
         allowedAmount.getAmount()
-            .setValue(item.getNet().getValue())
-            .setSystem("urn:iso:std:iso:4217")
-            .setCode("USD");
+                .setValue(item.getNet().getValue())
+                .setSystem("urn:iso:std:iso:4217")
+                .setCode("USD");
 
         ExplanationOfBenefit.AdjudicationComponent indicatorCode =
-            new ExplanationOfBenefit.AdjudicationComponent();
+                new ExplanationOfBenefit.AdjudicationComponent();
         indicatorCode.getCategory()
-            .getCoding()
-            .add(new Coding()
-                .setCode("https://bluebutton.cms.gov/resources/variables/line_prcsg_ind_cd")
-                .setSystem("https://bluebutton.cms.gov/resources/codesystem/adjudication")
-                .setDisplay("Line Processing Indicator Code"));
+                .getCoding()
+                .add(new Coding()
+                        .setCode("https://bluebutton.cms.gov/resources/variables/line_prcsg_ind_cd")
+                        .setSystem("https://bluebutton.cms.gov/resources/codesystem/adjudication")
+                        .setDisplay("Line Processing Indicator Code"));
 
         if (!inpatient && !outpatient) {
           indicatorCode.getReason()
-              .addCoding()
-              .setCode("A")
-              .setSystem("https://bluebutton.cms.gov/resources/variables/line_prcsg_ind_cd");
+                  .addCoding()
+                  .setCode("A")
+                  .setSystem("https://bluebutton.cms.gov/resources/variables/line_prcsg_ind_cd");
           indicatorCode
-              .getReason()
-              .getCodingFirstRep()
-              .setDisplay("Allowed");
+                  .getReason()
+                  .getCodingFirstRep()
+                  .setDisplay("Allowed");
         }
 
         // assume deductible is 0
         ExplanationOfBenefit.AdjudicationComponent deductibleAmount =
-            new ExplanationOfBenefit.AdjudicationComponent();
+                new ExplanationOfBenefit.AdjudicationComponent();
         deductibleAmount.getCategory()
-            .getCoding()
-            .add(new Coding()
-                .setCode("https://bluebutton.cms.gov/resources/variables/line_bene_ptb_ddctbl_amt")
-                .setSystem("https://bluebutton.cms.gov/resources/codesystem/adjudication")
-                .setDisplay("Line Beneficiary Part B Deductible Amount"));
+                .getCoding()
+                .add(new Coding()
+                        .setCode("https://bluebutton.cms.gov/resources/variables/line_bene_ptb_ddctbl_amt")
+                        .setSystem("https://bluebutton.cms.gov/resources/codesystem/adjudication")
+                        .setDisplay("Line Beneficiary Part B Deductible Amount"));
         deductibleAmount.getAmount()
-            .setValue(0)
-            .setSystem("urn:iso:std:iso:4217")
-            .setCode("USD");
+                .setValue(0)
+                .setSystem("urn:iso:std:iso:4217")
+                .setCode("USD");
 
         List<ExplanationOfBenefit.AdjudicationComponent> adjudicationComponents = new ArrayList<>();
         adjudicationComponents.add(coinsuranceAmount);
@@ -1394,28 +1463,28 @@ public class FhirStu3 {
     // There is no way to resolve this error.
     Money payment = new Money();
     payment.setValue(totalPayment)
-        .setSystem("urn:iso:std:iso:4217")
-        .setCode("USD");
+            .setSystem("urn:iso:std:iso:4217")
+            .setCode("USD");
     eob.setPayment(new ExplanationOfBenefit.PaymentComponent()
-        .setAmount(payment));
+            .setAmount(payment));
 
     // Hardcoded
     List<Reference> recipientList = new ArrayList<>();
     recipientList.add(new Reference()
-        .setIdentifier(new Identifier()
-        .setSystem("http://hl7.org/fhir/sid/us-npi")
-        .setValue("99999999")));
-    eob.addContained(new ReferralRequest()
-        .setStatus(ReferralRequest.ReferralRequestStatus.COMPLETED)
-        .setIntent(ReferralRequest.ReferralCategory.ORDER)
-        .setSubject(new Reference(personEntry.getFullUrl()))
-        .setRequester(new ReferralRequest.ReferralRequestRequesterComponent()
-            .setAgent(new Reference()
-                .setIdentifier(new Identifier()
+            .setIdentifier(new Identifier()
                     .setSystem("http://hl7.org/fhir/sid/us-npi")
-                    .setValue("99999999"))))
-        .setRecipient(recipientList)
-        .setId("1"));
+                    .setValue("99999999")));
+    eob.addContained(new ReferralRequest()
+            .setStatus(ReferralRequest.ReferralRequestStatus.COMPLETED)
+            .setIntent(ReferralRequest.ReferralCategory.ORDER)
+            .setSubject(new Reference(personEntry.getFullUrl()))
+            .setRequester(new ReferralRequest.ReferralRequestRequesterComponent()
+                    .setAgent(new Reference()
+                            .setIdentifier(new Identifier()
+                                    .setSystem("http://hl7.org/fhir/sid/us-npi")
+                                    .setValue("99999999"))))
+            .setRecipient(recipientList)
+            .setId("1"));
 
     if (encounter.clinician != null) {
       // This is what should happen if BlueButton 2.0 wasn't needlessly restrictive
@@ -1432,46 +1501,46 @@ public class FhirStu3 {
     }
 
     eob.addCareTeam(new ExplanationOfBenefit.CareTeamComponent()
-        .setSequence(1)
-        .setProvider(new Reference()
-            // .setReference(findProviderUrl(provider, bundle))
-            .setIdentifier(new Identifier()
-                .setSystem("http://hl7.org/fhir/sid/us-npi")
-                // providers don't have an npi
-                .setValue("99999999")))
-        .setRole(new CodeableConcept().addCoding(new Coding()
-            .setCode("primary")
-            .setSystem("http://hl7.org/fhir/claimcareteamrole")
-            .setDisplay("Primary Care Practitioner"))));
+            .setSequence(1)
+            .setProvider(new Reference()
+                    // .setReference(findProviderUrl(provider, bundle))
+                    .setIdentifier(new Identifier()
+                            .setSystem("http://hl7.org/fhir/sid/us-npi")
+                            // providers don't have an npi
+                            .setValue("99999999")))
+            .setRole(new CodeableConcept().addCoding(new Coding()
+                    .setCode("primary")
+                    .setSystem("http://hl7.org/fhir/claimcareteamrole")
+                    .setDisplay("Primary Care Practitioner"))));
 
     eob.setType(new CodeableConcept()
-        .addCoding(new Coding()
-            .setSystem("https://bluebutton.cms.gov/resources/variables/nch_clm_type_cd")
-            // The code should be chosen from the
-            // claim type, which is different from
-            // the encounter type apparently.
-            .setCode("71")
-            .setDisplay("Local carrier non-durable medical equipment, prosthetics, orthotics, "
-                + "and supplies (DMEPOS) claim"))
-        .addCoding(new Coding()
-            .setSystem("https://bluebutton.cms.gov/resources/codesystem/eob-type")
-            // the code is chosen directly as
-            // a result of the nch_clm_type_cd.
-            .setCode("CARRIER")
-            .setDisplay("EOB Type"))
-        .addCoding(new Coding()
-            .setSystem("http://hl7.org/fhir/ex-claimtype")
-            // the ex-claimtype is also directly dependent on
-            // the eob-type, making the clm_type the only real
-            // category that needs to be dynamically chosen
-            .setCode("professional")
-            .setDisplay("Claim Type"))
-        .addCoding(new Coding()
-            .setSystem("https://bluebutton.cms.gov/resources/variables/nch_near_line_rec_ident_cd")
-            // also dependent on clm-type
-            .setCode("O")
-            .setDisplay("Part B physician/supplier claim record (processed by local "
-                      + "carriers; can include DMEPOS services)")));
+            .addCoding(new Coding()
+                    .setSystem("https://bluebutton.cms.gov/resources/variables/nch_clm_type_cd")
+                    // The code should be chosen from the
+                    // claim type, which is different from
+                    // the encounter type apparently.
+                    .setCode("71")
+                    .setDisplay("Local carrier non-durable medical equipment, prosthetics, orthotics, "
+                            + "and supplies (DMEPOS) claim"))
+            .addCoding(new Coding()
+                    .setSystem("https://bluebutton.cms.gov/resources/codesystem/eob-type")
+                    // the code is chosen directly as
+                    // a result of the nch_clm_type_cd.
+                    .setCode("CARRIER")
+                    .setDisplay("EOB Type"))
+            .addCoding(new Coding()
+                    .setSystem("http://hl7.org/fhir/ex-claimtype")
+                    // the ex-claimtype is also directly dependent on
+                    // the eob-type, making the clm_type the only real
+                    // category that needs to be dynamically chosen
+                    .setCode("professional")
+                    .setDisplay("Claim Type"))
+            .addCoding(new Coding()
+                    .setSystem("https://bluebutton.cms.gov/resources/variables/nch_near_line_rec_ident_cd")
+                    // also dependent on clm-type
+                    .setCode("O")
+                    .setDisplay("Part B physician/supplier claim record (processed by local "
+                            + "carriers; can include DMEPOS services)")));
 
     return newEntry(bundle,eob);
   }
@@ -1486,7 +1555,7 @@ public class FhirStu3 {
    * @return The added Entry
    */
   private static BundleEntryComponent condition(BundleEntryComponent personEntry, Bundle bundle,
-      BundleEntryComponent encounterEntry, HealthRecord.Entry condition) {
+                                                BundleEntryComponent encounterEntry, HealthRecord.Entry condition) {
     Condition conditionResource = new Condition();
 
     conditionResource.setSubject(new Reference(personEntry.getFullUrl()));
@@ -1512,8 +1581,8 @@ public class FhirStu3 {
       // once different codes map to different categories
 
       conditionResource.addCategory(new CodeableConcept().addCoding(new Coding(
-          "http://standardhealthrecord.org/shr/condition/vs/ConditionCategoryVS", "disease",
-          "Disease")));
+              "http://standardhealthrecord.org/shr/condition/vs/ConditionCategoryVS", "disease",
+              "Disease")));
       conditionResource.setMeta(new Meta().addProfile(SHR_EXT + "shr-condition-Condition"));
       // required fields for this profile are clinicalStatus, assertedDate, category
     }
@@ -1535,7 +1604,7 @@ public class FhirStu3 {
    * @return The added Entry
    */
   private static BundleEntryComponent allergy(BundleEntryComponent personEntry, Bundle bundle,
-      BundleEntryComponent encounterEntry, HealthRecord.Entry allergy) {
+                                              BundleEntryComponent encounterEntry, HealthRecord.Entry allergy) {
 
     AllergyIntolerance allergyResource = new AllergyIntolerance();
 
@@ -1579,9 +1648,9 @@ public class FhirStu3 {
    * @return The added Entry
    */
   private static BundleEntryComponent observation(BundleEntryComponent personEntry, Bundle bundle,
-      BundleEntryComponent encounterEntry, Observation observation) {
+                                                  BundleEntryComponent encounterEntry, Observation observation) {
     org.hl7.fhir.dstu3.model.Observation observationResource =
-        new org.hl7.fhir.dstu3.model.Observation();
+            new org.hl7.fhir.dstu3.model.Observation();
 
     observationResource.setSubject(new Reference(personEntry.getFullUrl()));
     observationResource.setContext(new Reference(encounterEntry.getFullUrl()));
@@ -1592,7 +1661,7 @@ public class FhirStu3 {
     observationResource.setCode(mapCodeToCodeableConcept(code, LOINC_URI));
 
     observationResource.addCategory().addCoding().setCode(observation.category)
-        .setSystem("http://hl7.org/fhir/observation-category").setDisplay(observation.category);
+            .setSystem("http://hl7.org/fhir/observation-category").setDisplay(observation.category);
 
     if (observation.value != null) {
       Type value = mapValueToFHIRType(observation.value, observation.unit);
@@ -1646,11 +1715,11 @@ public class FhirStu3 {
 
     } else if (value instanceof Number) {
       return new Quantity().setValue(((Number) value).doubleValue())
-          .setCode(unit).setSystem(UNITSOFMEASURE_URI)
-          .setUnit(unit);
+              .setCode(unit).setSystem(UNITSOFMEASURE_URI)
+              .setUnit(unit);
     } else {
       throw new IllegalArgumentException("unexpected observation value class: "
-          + value.getClass().toString() + "; " + value);
+              + value.getClass().toString() + "; " + value);
     }
   }
 
@@ -1664,7 +1733,7 @@ public class FhirStu3 {
    * @return The added Entry
    */
   private static BundleEntryComponent procedure(BundleEntryComponent personEntry, Bundle bundle,
-      BundleEntryComponent encounterEntry, Procedure procedure) {
+                                                BundleEntryComponent encounterEntry, Procedure procedure) {
     org.hl7.fhir.dstu3.model.Procedure procedureResource = new org.hl7.fhir.dstu3.model.Procedure();
 
     procedureResource.setStatus(ProcedureStatus.COMPLETED);
@@ -1691,7 +1760,7 @@ public class FhirStu3 {
           Coding coding = condition.getCode().getCoding().get(0); // Only one element in list
           if (reason.code.equals(coding.getCode())) {
             procedureResource.addReasonReference().setReference(entry.getFullUrl())
-                .setDisplay(reason.display);
+                    .setDisplay(reason.display);
           }
         }
       }
@@ -1699,15 +1768,15 @@ public class FhirStu3 {
 
     if (USE_SHR_EXTENSIONS) {
       procedureResource.setMeta(
-          new Meta().addProfile(SHR_EXT + "shr-procedure-ProcedurePerformed"));
+              new Meta().addProfile(SHR_EXT + "shr-procedure-ProcedurePerformed"));
       // required fields for this profile are action-PerformedContext-extension,
       // status, code, subject, performed[x]
 
       Extension performedContext = new Extension();
       performedContext.setUrl(SHR_EXT + "shr-action-PerformedContext-extension");
       performedContext.addExtension(
-          SHR_EXT + "shr-action-Status-extension",
-          new CodeType("completed"));
+              SHR_EXT + "shr-action-Status-extension",
+              new CodeType("completed"));
 
       procedureResource.addExtension(performedContext);
     }
@@ -1719,7 +1788,7 @@ public class FhirStu3 {
   }
 
   private static BundleEntryComponent immunization(BundleEntryComponent personEntry, Bundle bundle,
-      BundleEntryComponent encounterEntry, HealthRecord.Entry immunization) {
+                                                   BundleEntryComponent encounterEntry, HealthRecord.Entry immunization) {
     Immunization immResource = new Immunization();
     immResource.setStatus(ImmunizationStatus.COMPLETED);
     immResource.setDate(new Date(immunization.start));
@@ -1737,8 +1806,8 @@ public class FhirStu3 {
       Extension performedContext = new Extension();
       performedContext.setUrl(SHR_EXT + "shr-action-PerformedContext-extension");
       performedContext.addExtension(
-          SHR_EXT + "shr-action-Status-extension",
-          new CodeType("completed"));
+              SHR_EXT + "shr-action-Status-extension",
+              new CodeType("completed"));
 
       immResource.addExtension(performedContext);
     }
@@ -1759,7 +1828,7 @@ public class FhirStu3 {
    * @return The added Entry
    */
   private static BundleEntryComponent medication(BundleEntryComponent personEntry, Bundle bundle,
-      BundleEntryComponent encounterEntry, Medication medication) {
+                                                 BundleEntryComponent encounterEntry, Medication medication) {
     MedicationRequest medicationResource = new MedicationRequest();
 
     medicationResource.setSubject(new Reference(personEntry.getFullUrl()));
@@ -1767,14 +1836,14 @@ public class FhirStu3 {
 
     Code code = medication.codes.get(0);
     String system = code.system.equals("SNOMED-CT")
-        ? SNOMED_URI
-        : RXNORM_URI;
+            ? SNOMED_URI
+            : RXNORM_URI;
     medicationResource.setMedication(mapCodeToCodeableConcept(code, system));
 
     medicationResource.setAuthoredOn(new Date(medication.start));
     medicationResource.setIntent(MedicationRequestIntent.ORDER);
     org.hl7.fhir.dstu3.model.Encounter encounter =
-        (org.hl7.fhir.dstu3.model.Encounter) encounterEntry.getResource();
+            (org.hl7.fhir.dstu3.model.Encounter) encounterEntry.getResource();
     MedicationRequestRequesterComponent requester = new MedicationRequestRequesterComponent();
     requester.setAgent(encounter.getParticipantFirstRep().getIndividual());
     requester.setOnBehalfOf(encounter.getServiceProvider());
@@ -1796,7 +1865,7 @@ public class FhirStu3 {
           Coding coding = condition.getCode().getCoding().get(0);
           if (reason.code.equals(coding.getCode())) {
             medicationResource.addReasonReference()
-                .setReference(entry.getFullUrl());
+                    .setReference(entry.getFullUrl());
           }
         }
       }
@@ -1815,25 +1884,25 @@ public class FhirStu3 {
         Timing timing = new Timing();
         TimingRepeatComponent timingRepeatComponent = new TimingRepeatComponent();
         timingRepeatComponent.setFrequency(
-            rxInfo.get("dosage").getAsJsonObject().get("frequency").getAsInt());
+                rxInfo.get("dosage").getAsJsonObject().get("frequency").getAsInt());
         timingRepeatComponent.setPeriod(
-            rxInfo.get("dosage").getAsJsonObject().get("period").getAsDouble());
+                rxInfo.get("dosage").getAsJsonObject().get("period").getAsDouble());
         timingRepeatComponent.setPeriodUnit(
-            convertUcumCode(rxInfo.get("dosage").getAsJsonObject().get("unit").getAsString()));
+                convertUcumCode(rxInfo.get("dosage").getAsJsonObject().get("unit").getAsString()));
         timing.setRepeat(timingRepeatComponent);
         dosage.setTiming(timing);
 
         Quantity dose = new SimpleQuantity().setValue(
-            rxInfo.get("dosage").getAsJsonObject().get("amount").getAsDouble());
+                rxInfo.get("dosage").getAsJsonObject().get("amount").getAsDouble());
         dosage.setDose(dose);
 
         if (rxInfo.has("instructions")) {
           for (JsonElement instructionElement : rxInfo.get("instructions").getAsJsonArray()) {
             JsonObject instruction = instructionElement.getAsJsonObject();
             Code instructionCode = new Code(
-                SNOMED_URI,
-                instruction.get("code").getAsString(),
-                instruction.get("display").getAsString()
+                    SNOMED_URI,
+                    instruction.get("code").getAsString(),
+                    instruction.get("display").getAsString()
             );
 
             dosage.addAdditionalInstruction(mapCodeToCodeableConcept(instructionCode, SNOMED_URI));
@@ -1849,22 +1918,22 @@ public class FhirStu3 {
     if (USE_SHR_EXTENSIONS) {
 
       medicationResource.addExtension()
-        .setUrl(SHR_EXT + "shr-base-ActionCode-extension")
-        .setValue(PRESCRIPTION_OF_DRUG_CC);
+              .setUrl(SHR_EXT + "shr-base-ActionCode-extension")
+              .setValue(PRESCRIPTION_OF_DRUG_CC);
 
       medicationResource.setMeta(new Meta()
-          .addProfile(SHR_EXT + "shr-medication-MedicationRequested"));
+              .addProfile(SHR_EXT + "shr-medication-MedicationRequested"));
       // required fields for this profile are status, action-RequestedContext-extension,
       // medication[x]subject, authoredOn, requester
 
       Extension requestedContext = new Extension();
       requestedContext.setUrl(SHR_EXT + "shr-action-RequestedContext-extension");
       requestedContext.addExtension(
-          SHR_EXT + "shr-action-Status-extension",
-          new CodeType("completed"));
+              SHR_EXT + "shr-action-Status-extension",
+              new CodeType("completed"));
       requestedContext.addExtension(
-          SHR_EXT + "shr-action-RequestIntent-extension",
-          new CodeType("original-order"));
+              SHR_EXT + "shr-action-RequestIntent-extension",
+              new CodeType("original-order"));
 
       medicationResource.addExtension(requestedContext);
     }
@@ -1877,9 +1946,9 @@ public class FhirStu3 {
   }
 
   private static final Code PRESCRIPTION_OF_DRUG_CODE =
-      new Code("SNOMED-CT","33633005","Prescription of drug (procedure)");
+          new Code("SNOMED-CT","33633005","Prescription of drug (procedure)");
   private static final CodeableConcept PRESCRIPTION_OF_DRUG_CC =
-      mapCodeToCodeableConcept(PRESCRIPTION_OF_DRUG_CODE, SNOMED_URI);
+          mapCodeToCodeableConcept(PRESCRIPTION_OF_DRUG_CODE, SNOMED_URI);
 
 
   /**
@@ -1892,7 +1961,7 @@ public class FhirStu3 {
    * @return The added Entry
    */
   private static BundleEntryComponent report(BundleEntryComponent personEntry, Bundle bundle,
-      BundleEntryComponent encounterEntry, Report report) {
+                                             BundleEntryComponent encounterEntry, Report report) {
     DiagnosticReport reportResource = new DiagnosticReport();
     reportResource.setStatus(DiagnosticReportStatus.FINAL);
     reportResource.setCode(mapCodeToCodeableConcept(report.codes.get(0), LOINC_URI));
@@ -1921,7 +1990,7 @@ public class FhirStu3 {
    * @return The added Entry
    */
   private static BundleEntryComponent careplan(BundleEntryComponent personEntry, Bundle bundle,
-      BundleEntryComponent encounterEntry, CarePlan carePlan) {
+                                               BundleEntryComponent encounterEntry, CarePlan carePlan) {
     org.hl7.fhir.dstu3.model.CarePlan careplanResource = new org.hl7.fhir.dstu3.model.CarePlan();
     careplanResource.setIntent(CarePlanIntent.ORDER);
     careplanResource.setSubject(new Reference(personEntry.getFullUrl()));
@@ -1950,7 +2019,7 @@ public class FhirStu3 {
       for (Code activity : carePlan.activities) {
         CarePlanActivityComponent activityComponent = new CarePlanActivityComponent();
         CarePlanActivityDetailComponent activityDetailComponent =
-            new CarePlanActivityDetailComponent();
+                new CarePlanActivityDetailComponent();
 
         activityDetailComponent.setStatus(activityStatus);
 
@@ -1994,9 +2063,9 @@ public class FhirStu3 {
    * @return The added Entry
    */
   private static BundleEntryComponent imagingStudy(BundleEntryComponent personEntry, Bundle bundle,
-      BundleEntryComponent encounterEntry, ImagingStudy imagingStudy) {
+                                                   BundleEntryComponent encounterEntry, ImagingStudy imagingStudy) {
     org.hl7.fhir.dstu3.model.ImagingStudy imagingStudyResource =
-        new org.hl7.fhir.dstu3.model.ImagingStudy();
+            new org.hl7.fhir.dstu3.model.ImagingStudy();
 
     imagingStudyResource.setUid("urn:oid:" + imagingStudy.dicomUid);
     imagingStudyResource.setPatient(new Reference(personEntry.getFullUrl()));
@@ -2010,7 +2079,7 @@ public class FhirStu3 {
     imagingStudyResource.setNumberOfSeries(numberOfSeries);
 
     List<ImagingStudySeriesComponent> seriesResourceList =
-        new ArrayList<ImagingStudySeriesComponent>();
+            new ArrayList<ImagingStudySeriesComponent>();
 
     int totalNumberOfInstances = 0;
     int seriesNo = 1;
@@ -2034,13 +2103,13 @@ public class FhirStu3 {
       totalNumberOfInstances += numberOfInstances;
 
       List<ImagingStudySeriesInstanceComponent> instanceResourceList =
-          new ArrayList<ImagingStudySeriesInstanceComponent>();
+              new ArrayList<ImagingStudySeriesInstanceComponent>();
 
       int instanceNo = 1;
 
       for (ImagingStudy.Instance instance : series.instances) {
         ImagingStudySeriesInstanceComponent instanceResource =
-            new ImagingStudySeriesInstanceComponent();
+                new ImagingStudySeriesInstanceComponent();
         instanceResource.setUid("urn:oid:" + instance.dicomUid);
         instanceResource.setTitle(instance.title);
         instanceResource.setSopClass("urn:oid:" + instance.sopClass.code);
@@ -2068,29 +2137,29 @@ public class FhirStu3 {
    */
   protected static BundleEntryComponent provider(Bundle bundle, Provider provider) {
     org.hl7.fhir.dstu3.model.Organization organizationResource =
-        new org.hl7.fhir.dstu3.model.Organization();
+            new org.hl7.fhir.dstu3.model.Organization();
 
     List<CodeableConcept> organizationType = new ArrayList<CodeableConcept>();
     organizationType.add(
-        mapCodeToCodeableConcept(
-            new Code(
-                "http://hl7.org/fhir/organization-type",
-                "prov",
-                "Healthcare Provider"),
-            "http://hl7.org/fhir/organization-type"));
+            mapCodeToCodeableConcept(
+                    new Code(
+                            "http://hl7.org/fhir/organization-type",
+                            "prov",
+                            "Healthcare Provider"),
+                    "http://hl7.org/fhir/organization-type"));
 
     organizationResource.addIdentifier().setSystem("https://github.com/synthetichealth/synthea")
-    .setValue((String) provider.getResourceID());
+            .setValue((String) provider.getResourceID());
 
     organizationResource.setId(provider.getResourceID());
     organizationResource.setName(provider.name);
     organizationResource.setType(organizationType);
 
     Address address = new Address()
-        .addLine(provider.address)
-        .setCity(provider.city)
-        .setPostalCode(provider.zip)
-        .setState(provider.state);
+            .addLine(provider.address)
+            .setCity(provider.city)
+            .setPostalCode(provider.zip)
+            .setState(provider.state);
     if (COUNTRY_CODE != null) {
       address.setCountry(COUNTRY_CODE);
     }
@@ -2098,8 +2167,8 @@ public class FhirStu3 {
 
     if (provider.phone != null && !provider.phone.isEmpty()) {
       ContactPoint contactPoint = new ContactPoint()
-          .setSystem(ContactPointSystem.PHONE)
-          .setValue(provider.phone);
+              .setSystem(ContactPointSystem.PHONE)
+              .setValue(provider.phone);
       organizationResource.addTelecom(contactPoint);
     }
 
@@ -2108,8 +2177,8 @@ public class FhirStu3 {
       // required fields for this profile are identifier, type, address, and contact
 
       organizationResource.addIdentifier()
-          .setSystem("urn:ietf:rfc:3986")
-          .setValue(provider.getResourceID());
+              .setSystem("urn:ietf:rfc:3986")
+              .setValue(provider.getResourceID());
       organizationResource.addContact().setName(new HumanName().setText("Synthetic Provider"));
     }
 
@@ -2126,18 +2195,18 @@ public class FhirStu3 {
     Practitioner practitionerResource = new Practitioner();
 
     practitionerResource.addIdentifier().setSystem("http://hl7.org/fhir/sid/us-npi")
-    .setValue("" + clinician.seed);
+            .setValue("" + clinician.seed);
     practitionerResource.setActive(true);
     practitionerResource.addName().setFamily(
-        (String) clinician.attributes.get(Clinician.LAST_NAME))
-      .addGiven((String) clinician.attributes.get(Clinician.FIRST_NAME))
-      .addPrefix((String) clinician.attributes.get(Clinician.NAME_PREFIX));
+            (String) clinician.attributes.get(Clinician.LAST_NAME))
+            .addGiven((String) clinician.attributes.get(Clinician.FIRST_NAME))
+            .addPrefix((String) clinician.attributes.get(Clinician.NAME_PREFIX));
 
     Address address = new Address()
-        .addLine((String) clinician.attributes.get(Clinician.ADDRESS))
-        .setCity((String) clinician.attributes.get(Clinician.CITY))
-        .setPostalCode((String) clinician.attributes.get(Clinician.ZIP))
-        .setState((String) clinician.attributes.get(Clinician.STATE));
+            .addLine((String) clinician.attributes.get(Clinician.ADDRESS))
+            .setCity((String) clinician.attributes.get(Clinician.CITY))
+            .setPostalCode((String) clinician.attributes.get(Clinician.ZIP))
+            .setState((String) clinician.attributes.get(Clinician.STATE));
     if (COUNTRY_CODE != null) {
       address.setCountry(COUNTRY_CODE);
     }
@@ -2160,11 +2229,11 @@ public class FhirStu3 {
    * @return The added Entry
    */
   private static BundleEntryComponent caregoal(
-      Bundle bundle, GoalStatus goalStatus, JsonObject goal) {
+          Bundle bundle, GoalStatus goalStatus, JsonObject goal) {
     String resourceID = UUID.randomUUID().toString();
 
     org.hl7.fhir.dstu3.model.Goal goalResource =
-        new org.hl7.fhir.dstu3.model.Goal();
+            new org.hl7.fhir.dstu3.model.Goal();
     goalResource.setStatus(goalStatus);
     goalResource.setId(resourceID);
 
@@ -2177,11 +2246,11 @@ public class FhirStu3 {
       CodeableConcept descriptionCodeableConcept = new CodeableConcept();
 
       JsonObject code =
-          goal.get("codes").getAsJsonArray().get(0).getAsJsonObject();
+              goal.get("codes").getAsJsonArray().get(0).getAsJsonObject();
       descriptionCodeableConcept.addCoding()
-        .setSystem(LOINC_URI)
-        .setCode(code.get("code").getAsString())
-        .setDisplay(code.get("display").getAsString());
+              .setSystem(LOINC_URI)
+              .setCode(code.get("code").getAsString())
+              .setDisplay(code.get("display").getAsString());
 
       descriptionCodeableConcept.setText(code.get("display").getAsString());
       goalResource.setDescription(descriptionCodeableConcept);
@@ -2192,10 +2261,10 @@ public class FhirStu3 {
       JsonObject logic = goal.get("observation").getAsJsonObject();
 
       String[] text = {
-        logic.get("codes").getAsJsonArray().get(0)
-            .getAsJsonObject().get("display").getAsString(),
-        logic.get("operator").getAsString(),
-        logic.get("value").getAsString()
+              logic.get("codes").getAsJsonArray().get(0)
+                      .getAsJsonObject().get("display").getAsString(),
+              logic.get("operator").getAsString(),
+              logic.get("value").getAsString()
       };
 
       descriptionCodeableConcept.setText(String.join(" ", text));
@@ -2207,12 +2276,12 @@ public class FhirStu3 {
         if (reasonElement instanceof JsonObject) {
           JsonObject reasonObject = reasonElement.getAsJsonObject();
           String reasonCode =
-              reasonObject.get("codes")
-                  .getAsJsonObject()
-                  .get("SNOMED-CT")
-                  .getAsJsonArray()
-                  .get(0)
-                  .getAsString();
+                  reasonObject.get("codes")
+                          .getAsJsonObject()
+                          .get("SNOMED-CT")
+                          .getAsJsonArray()
+                          .get(0)
+                          .getAsString();
 
           for (BundleEntryComponent entry : bundle.getEntry()) {
             if (entry.getResource().fhirType().equals("Condition")) {
@@ -2221,7 +2290,7 @@ public class FhirStu3 {
               Coding coding = condition.getCode().getCoding().get(0);
               if (reasonCode.equals(coding.getCode())) {
                 goalResource.addAddresses()
-                    .setReference(entry.getFullUrl());
+                        .setReference(entry.getFullUrl());
               }
             }
           }
@@ -2330,7 +2399,7 @@ public class FhirStu3 {
    * @return the created Entry
    */
   private static BundleEntryComponent newEntry(Bundle bundle, Resource resource,
-      String resourceID) {
+                                               String resourceID) {
     BundleEntryComponent entry = bundle.addEntry();
 
     resource.setId(resourceID);
