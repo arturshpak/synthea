@@ -84,7 +84,7 @@ public abstract class Exporter {
       Path outFilePathT = outDirectoryT.toPath().resolve(filename(person, fileTag, "json"));
       Path outFileCommonTND = outDirectoryTND.toPath().resolve("transaction.ndjson");
       Path outFilePathC = outDirectoryC.toPath().resolve(filename(person, fileTag, "json"));
-      Path outFileCommonCND = outDirectoryCND.toPath().resolve("collections.ndjson");
+      Path outFileCommonCND = outDirectoryCND.toPath().resolve("collection.ndjson");
 
       writeNewFile(outFilePathT, bundleTJson);
       writeNewFile(outFilePathC, bundleCJson);
