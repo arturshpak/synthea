@@ -32,6 +32,7 @@ import org.hl7.fhir.dstu3.model.Bundle.BundleEntryRequestComponent;
 import org.hl7.fhir.dstu3.model.Bundle.BundleType;
 import org.hl7.fhir.dstu3.model.Bundle.HTTPVerb;
 
+import ca.uhn.fhir.model.dstu2.valueset.BundleTypeEnum;
 
 public abstract class Exporter {
   /**
@@ -105,17 +106,26 @@ public abstract class Exporter {
       }
     }
     if (Boolean.parseBoolean(Config.get("exporter.fhir_dstu2.export"))) {
-      File outDirectory = getOutputFolder("fhir_dstu2", person);
-      String bundleJson = FhirDstu2.convertToFHIRJson(person, stopTime);
-      Path outFilePath = outDirectory.toPath().resolve(filename(person, fileTag, "json"));
-      writeNewFile(outFilePath, bundleJson);
+      //File outDirectory = getOutputFolder("fhir_dstu2", person);
+      //String bundleJson = FhirDstu2.convertToFHIRJson(person, stopTime);
+      //Path outFilePath = outDirectory.toPath().resolve(filename(person, fileTag, "json"));
+      //writeNewFile(outFilePath, bundleJson);
+      File outDirectoryTND = getOutputFolder("fhir_dstu2_transaction_ndjson", person);
+      File outDirectoryCND = getOutputFolder("fhir_dstu2_collection_ndjson", person);
+      String bundleTNDJson = FhirDstu2.convertToFHIRJsonCustom(person, stopTime, BundleTypeEnum.TRANSACTION, true);
+      String bundleCNDJson = FhirDstu2.convertToFHIRJsonCustom(person, stopTime, BundleTypeEnum.TRANSACTION, true);
+      Path outFileCommonTND = outDirectoryTND.toPath().resolve("transaction.ndjson");
+      Path outFileCommonCND = outDirectoryCND.toPath().resolve("collection.ndjson");
+      appendToFile(outFileCommonTND, bundleTNDJson);
+      appendToFile(outFileCommonCND, bundleCNDJson);
+
       if (Boolean.parseBoolean(Config.get("exporter.fhir.bulk_data"))) {
-        outDirectory = getOutputFolder("fhir_dstu2_ndjson", person);
+        File outDirectory = getOutputFolder("fhir_dstu2_ndjson", person);
         ca.uhn.fhir.model.dstu2.resource.Bundle bundle = FhirDstu2.convertToFHIR(person, stopTime);
         IParser parser = FhirContext.forDstu2().newJsonParser().setPrettyPrint(false);
         for (ca.uhn.fhir.model.dstu2.resource.Bundle.Entry entry : bundle.getEntry()) {
           String filename = entry.getResource().getResourceName() + ".ndjson";
-          outFilePath = outDirectory.toPath().resolve(filename);
+          Path outFilePath = outDirectory.toPath().resolve(filename);
           String entryJson = parser.encodeResourceToString(entry.getResource());
           appendToFile(outFilePath, entryJson);
         }

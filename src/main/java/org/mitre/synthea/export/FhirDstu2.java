@@ -223,6 +223,58 @@ public class FhirDstu2 {
     return bundle;
   }
 
+  public static Bundle convertToFHIRCustom(Person person, long stopTime, BundleTypeEnum btype) {
+    Bundle bundle = new Bundle();
+    bundle.setType(btype);
+
+    Entry personEntry = basicInfo(person, bundle, stopTime);
+
+    for (Encounter encounter : person.record.encounters) {
+      Entry encounterEntry = encounter(person, personEntry, bundle, encounter);
+
+      for (HealthRecord.Entry condition : encounter.conditions) {
+        condition(personEntry, bundle, encounterEntry, condition);
+      }
+
+      for (HealthRecord.Entry allergy : encounter.allergies) {
+        allergy(personEntry, bundle, encounterEntry, allergy);
+      }
+
+      for (Observation observation : encounter.observations) {
+        observation(personEntry, bundle, encounterEntry, observation);
+      }
+
+      for (Procedure procedure : encounter.procedures) {
+        procedure(personEntry, bundle, encounterEntry, procedure);
+      }
+
+      for (Medication medication : encounter.medications) {
+        medication(personEntry, bundle, encounterEntry, medication);
+      }
+
+      for (HealthRecord.Entry immunization : encounter.immunizations) {
+        immunization(personEntry, bundle, encounterEntry, immunization);
+      }
+
+      for (Report report : encounter.reports) {
+        report(personEntry, bundle, encounterEntry, report);
+      }
+
+      for (CarePlan careplan : encounter.careplans) {
+        careplan(personEntry, bundle, encounterEntry, careplan);
+      }
+
+      for (ImagingStudy imagingStudy : encounter.imagingStudies) {
+        imagingStudy(personEntry, bundle, encounterEntry, imagingStudy);
+      }
+
+      // one claim per encounter
+      encounterClaim(personEntry, bundle, encounterEntry, encounter.claim);
+    }
+    return bundle;
+  }
+
+
   /**
    * Convert the given Person into a JSON String, containing a FHIR Bundle of the Person and the
    * associated entries from their health record.
@@ -238,6 +290,13 @@ public class FhirDstu2 {
     Bundle bundle = convertToFHIR(person, stopTime);
     String bundleJson = FHIR_CTX.newJsonParser().setPrettyPrint(true)
         .encodeResourceToString(bundle);
+    return bundleJson;
+  }
+
+  public static String convertToFHIRJsonCustom(Person person, long stopTime, BundleTypeEnum btype, boolean pretty) {
+    Bundle bundle = convertToFHIRCustom(person, stopTime, btype);
+    String bundleJson = FHIR_CTX.newJsonParser().setPrettyPrint(pretty)
+            .encodeResourceToString(bundle);
     return bundleJson;
   }
 
